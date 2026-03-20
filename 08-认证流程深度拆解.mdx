@@ -1,0 +1,290 @@
+---
+title: "08 - 认证流程深度拆解"
+description: "navigator.credentials.get() 背后发生了什么"
+sidebar_position: 8
+---
+
+# 08 - 认证流程深度拆解
+
+## 8.1 全景时序图
+
+```mermaid
+sequenceDiagram
+    actor U as 用户
+    participant JS as 前端 JS
+    participant BR as 浏览器引擎
+    participant AU as 认证器
+    participant SV as 后端服务器
+
+    U->>JS: 点击"登录"
+
+    JS->>SV: POST /auth/begin（可选：用户名）
+    SV->>SV: 生成 challenge + 查找凭据
+    SV-->>JS: options
+
+    JS->>BR: credentials.get(options)
+    BR->>BR: 验证 RP ID + 构造 clientData
+    BR->>AU: CTAP getAssertion
+
+    AU->>U: 弹出 Passkey 选择 + 生物特征验证
+    U->>AU: 选择账户 + 指纹 ✓
+
+    AU->>AU: 找到凭据 + 签名
+    AU-->>BR: {authenticatorData, signature, userHandle}
+    BR-->>JS: assertion
+
+    JS->>SV: POST /auth/complete (assertion)
+    SV->>SV: 验证签名 + 建立会话
+    SV-->>JS: 登录成功 ✓
+    JS-->>U: 登录成功
+```
+
+---
+
+## 8.2 两种认证模式
+
+```mermaid
+graph LR
+    subgraph A["模式 A：有用户名"]
+        A1["用户输入用户名"] --> A2["服务器查找凭据 ID"]
+        A2 --> A3["放入 allowCredentials"]
+        A3 --> A4["认证器根据 ID 找到私钥"]
+    end
+
+    subgraph B["模式 B：无用户名 ★ Passkey"]
+        B1["用户点击「使用 Passkey 登录」"] --> B2["服务器不发 allowCredentials"]
+        B2 --> B3["认证器列出所有已存储凭据"]
+        B3 --> B4["用户选择账户"]
+        B4 --> B5["服务器通过 userHandle 识别用户"]
+    end
+
+    style B fill:#16a34a,stroke:#15803d,color:#fff
+```
+
+模式 B 是 Passkey 的典型体验——**真正的无密码 + 无用户名**。
+
+---
+
+## 8.3 第一步：服务端生成认证选项
+
+```python
+def auth_begin(username=None):
+    challenge = os.urandom(32)
+    session.pending_challenge = challenge
+
+    options = {
+        "challenge": challenge,
+        "rpId": "example.com",
+        "timeout": 60000,
+        "userVerification": "required"
+    }
+
+    if username:
+        # 模式 A：指定凭据
+        user = db.get_user(username)
+        credentials = db.get_credentials(user.id)
+        options["allowCredentials"] = [
+            {
+                "id": c.credential_id,
+                "type": "public-key",
+                "transports": c.transports  # ["internal", "hybrid"] 等
+            }
+            for c in credentials
+        ]
+    else:
+        # 模式 B：Discoverable Credential（无用户名）
+        options["allowCredentials"] = []
+
+    return options
+```
+
+:::info[transports 字段的作用]
+告诉浏览器这个凭据可以通过什么传输方式使用，浏览器用来**优化 UI**：
+
+| 值 | 含义 | UI 行为 |
+|----|------|---------|
+| `"internal"` | 平台认证器 | 直接弹出 Touch ID |
+| `"hybrid"` | 手机扫码 | 显示二维码选项 |
+| `"usb"` | USB 安全密钥 | 提示插入安全密钥 |
+| `"ble"` | 蓝牙 | 蓝牙配对提示 |
+| `"nfc"` | 近场通信 | NFC 触碰提示 |
+:::
+
+---
+
+## 8.4 第二步：浏览器和认证器处理
+
+**浏览器**：验证 rpId 匹配 → 构造 `clientDataJSON`（type=`"webauthn.get"`，包含 origin）→ `clientDataHash = SHA-256(clientDataJSON)` → 发送 CTAP getAssertion
+
+**认证器**：
+
+1. 根据 rpId 查找匹配的凭据
+2. 如果有多个 → 让用户选择
+3. 要求用户验证（指纹/面容/PIN）
+4. 构造 `authenticatorData`（rpIdHash + flags + signCount，**认证时无 attestedCredentialData**）
+5. 计算签名：`signature = sign(authenticatorData + clientDataHash, SK)`
+6. 返回 `{authenticatorData, signature, userHandle}`
+
+---
+
+## 8.5 第三步：服务端验证（最关键）
+
+```python
+def auth_complete(assertion_response):
+
+    # ===== 解码 clientDataJSON =====
+    client_data = json.decode(assertion_response.clientDataJSON)
+
+    # 1. 验证 type
+    assert client_data["type"] == "webauthn.get"
+
+    # 2. 验证 challenge
+    assert base64url_decode(client_data["challenge"]) == session.pending_challenge
+    del session.pending_challenge
+
+    # 3. 验证 origin ★★★
+    assert client_data["origin"] in ALLOWED_ORIGINS
+
+    # ===== 查找凭据 =====
+    credential_id = assertion_response.rawId
+    # Discoverable 模式：通过 userHandle 识别用户
+    credential = db.get_credential(credential_id)
+    assert credential is not None
+
+    # ===== 解析 authenticatorData =====
+    auth_data = parse_authenticator_data(assertion_response.authenticatorData)
+
+    # 5. 验证 rpIdHash
+    assert auth_data.rpIdHash == SHA256("example.com")
+
+    # 6. 验证 flags
+    assert auth_data.flags.UP == true
+    assert auth_data.flags.UV == true  # 如果 required
+
+    # ===== 验证签名 ★★★ 核心步骤 ★★★ =====
+    client_data_hash = SHA256(assertion_response.clientDataJSON)  # 对原始字节哈希
+    signature_base = assertion_response.authenticatorData + client_data_hash
+    valid = verify_signature(
+        public_key=credential.public_key,
+        signature=assertion_response.signature,
+        data=signature_base
+    )
+    assert valid == true
+
+    # ===== 签名计数器检查 =====
+    if auth_data.signCount != 0 or credential.sign_count != 0:
+        if auth_data.signCount <= credential.sign_count:
+            raise SecurityAlert("Possible credential cloning detected")
+        credential.sign_count = auth_data.signCount
+
+    # ===== 建立会话 =====
+    session.user_id = credential.user_id
+    return {"status": "ok"}
+```
+
+---
+
+## 8.6 签名验证的数学
+
+```mermaid
+graph TD
+    subgraph 认证器端
+        AD["authenticatorData"]
+        CDJ["clientDataJSON"]
+        CDH["SHA-256(clientDataJSON)"]
+        MSG1["message = authData ∥ hash"]
+        SIG["signature = ECDSA_Sign(SK, message)"]
+
+        CDJ --> CDH
+        AD --> MSG1
+        CDH --> MSG1
+        MSG1 --> SIG
+    end
+
+    subgraph 服务器端
+        AD2["authenticatorData（收到的）"]
+        CDJ2["clientDataJSON（收到的）"]
+        CDH2["SHA-256(clientDataJSON)"]
+        MSG2["message = authData ∥ hash"]
+        VER["ECDSA_Verify(PK, message, signature)"]
+        RES{{"✓ or ✗"}}
+
+        CDJ2 --> CDH2
+        AD2 --> MSG2
+        CDH2 --> MSG2
+        MSG2 --> VER
+        VER --> RES
+    end
+
+    style SIG fill:#2563eb,stroke:#1d4ed8,color:#fff
+    style VER fill:#2563eb,stroke:#1d4ed8,color:#fff
+```
+
+> 如果签名有效 → 持有 SK 的实体确实签了这些数据 → SK 只存在于认证器中 → 用户确实在场并使用了正确的认证器。
+
+---
+
+## 8.7 为什么签 authenticatorData + hash(clientDataJSON)？
+
+:::tip[为什么不直接签 challenge？]
+因为签名需要绑定**多个**上下文信息：
+
+| 数据来源 | 包含内容 | 保护目标 |
+|----------|----------|----------|
+| **authenticatorData** | rpIdHash | 绑定到网站域名 |
+| | flags | 证明用户在场并验证了身份 |
+| | signCount | 克隆检测 |
+| **clientDataJSON** | challenge | 防重放 |
+| | origin | 防钓鱼 |
+| | type | 防混淆（create 签名不能当 get 用） |
+
+所有这些信息都被签名覆盖 → **任何一个被篡改都会导致签名验证失败**。
+:::
+
+---
+
+## 8.8 条件式 UI（Conditional Mediation）
+
+现代浏览器支持一种更优雅的 Passkey 登录体验：
+
+```javascript
+// HTML: <input autocomplete="username webauthn">
+
+const assertion = await navigator.credentials.get({
+  publicKey: {
+    challenge: challengeFromServer,
+    rpId: "example.com",
+    userVerification: "required"
+  },
+  mediation: "conditional"    // ★ 关键参数
+});
+```
+
+```mermaid
+graph LR
+    A["用户聚焦用户名输入框"] --> B["自动填充下拉菜单"]
+    B --> C{"选择什么？"}
+    C -->|"Passkey 选项"| D["指纹验证 → 直接登录"]
+    C -->|"忽略"| E["正常输入用户名密码"]
+
+    style D fill:#16a34a,stroke:#15803d,color:#fff
+```
+
+:::info[渐进式部署的最佳方式]
+Conditional UI 不破坏现有的用户名+密码流程，同时为已注册 Passkey 的用户提供快捷登录。不弹出模态对话框，Passkey 选项出现在自动填充建议中。
+:::
+
+---
+
+## 本课要点
+
+:::note[总结]
+- 认证有两种模式：有用户名（`allowCredentials`）和无用户名（Discoverable）
+- 无用户名模式 = Passkey 的典型体验
+- 签名覆盖 `authenticatorData + hash(clientDataJSON)` → 同时绑定域名、挑战、来源
+- 服务端必须验证：type、challenge、origin、rpIdHash、flags、signature、signCount
+- `signCount ≤ 上次记录` → 疑似凭据克隆
+- Conditional Mediation = 在自动填充中显示 Passkey → 渐进式部署
+:::
+
+> **下一课**：[09 - Passkey：同步凭据与无密码未来](./09-Passkey同步凭据与无密码未来.mdx)
