@@ -1,3 +1,19 @@
 @import 'tailwindcss';
 @import 'fumadocs-ui/css/neutral.css';
 @import 'fumadocs-ui/css/preset.css';
+
+:root {
+  --course-accent-rgb: 5 150 105;
+}
+
+body {
+  background-color: var(--color-fd-background);
+  background-image:
+    radial-gradient(circle at top right, rgba(var(--course-accent-rgb), 0.08), transparent 28%),
+    radial-gradient(circle at left 18%, rgba(var(--course-accent-rgb), 0.04), transparent 24%);
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba(var(--course-accent-rgb), 0.18);
+}
