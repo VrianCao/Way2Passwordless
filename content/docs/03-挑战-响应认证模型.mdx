@@ -51,7 +51,9 @@ sequenceDiagram
 ```
 
 :::danger
+
 问题：签名只绑定了 challenge，没有绑定"你在和谁通信"。
+
 :::
 
 ### 攻击二：恶意软件代签
@@ -92,7 +94,9 @@ sequenceDiagram
 ```
 
 :::tip[关键]
+
 origin 由浏览器/操作系统提供，不由 JavaScript 或用户控制。这就是为什么 WebAuthn **必须在浏览器层面实现**，而不能是一个纯 JavaScript 库。
+
 :::
 
 ### 用户验证（User Verification）— 解决恶意软件
@@ -164,7 +168,9 @@ graph TD
 ```
 
 :::note
+
 不能**防止**克隆，但能**检测**克隆。Passkey（同步凭据）的计数器通常为 0 或不递增，因为同步本身就是"合法的克隆"。这在第 09 课详述。
+
 :::
 
 ---
@@ -188,12 +194,14 @@ graph TD
 ## 本课要点
 
 :::note[总结]
+
 - 挑战-响应 = 服务器出随机题，设备用私钥签名作答
 - 仅签 challenge 不够 → 钓鱼中继攻击
 - 签名必须绑定 origin → **浏览器层面阻止钓鱼（这是核心创新！）**
 - 用户验证确保是本人在操作
 - 签名计数器可检测凭据克隆
 - 完整协议 = challenge + origin binding + user verification + sign counter
+
 :::
 
-> **下一课**：[04 - FIDO 联盟与标准演进](./04-FIDO联盟与标准演进.mdx)
+> **下一课**：[04 - FIDO 联盟与标准演进](/docs/04-FIDO联盟与标准演进)

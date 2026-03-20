@@ -99,6 +99,7 @@ def auth_begin(username=None):
 ```
 
 :::info[transports 字段的作用]
+
 告诉浏览器这个凭据可以通过什么传输方式使用，浏览器用来**优化 UI**：
 
 | 值 | 含义 | UI 行为 |
@@ -108,6 +109,7 @@ def auth_begin(username=None):
 | `"usb"` | USB 安全密钥 | 提示插入安全密钥 |
 | `"ble"` | 蓝牙 | 蓝牙配对提示 |
 | `"nfc"` | 近场通信 | NFC 触碰提示 |
+
 :::
 
 ---
@@ -227,6 +229,7 @@ graph TD
 ## 8.7 为什么签 authenticatorData + hash(clientDataJSON)？
 
 :::tip[为什么不直接签 challenge？]
+
 因为签名需要绑定**多个**上下文信息：
 
 | 数据来源 | 包含内容 | 保护目标 |
@@ -239,6 +242,7 @@ graph TD
 | | type | 防混淆（create 签名不能当 get 用） |
 
 所有这些信息都被签名覆盖 → **任何一个被篡改都会导致签名验证失败**。
+
 :::
 
 ---
@@ -271,7 +275,9 @@ graph LR
 ```
 
 :::info[渐进式部署的最佳方式]
+
 Conditional UI 不破坏现有的用户名+密码流程，同时为已注册 Passkey 的用户提供快捷登录。不弹出模态对话框，Passkey 选项出现在自动填充建议中。
+
 :::
 
 ---
@@ -279,12 +285,14 @@ Conditional UI 不破坏现有的用户名+密码流程，同时为已注册 Pas
 ## 本课要点
 
 :::note[总结]
+
 - 认证有两种模式：有用户名（`allowCredentials`）和无用户名（Discoverable）
 - 无用户名模式 = Passkey 的典型体验
 - 签名覆盖 `authenticatorData + hash(clientDataJSON)` → 同时绑定域名、挑战、来源
 - 服务端必须验证：type、challenge、origin、rpIdHash、flags、signature、signCount
 - `signCount ≤ 上次记录` → 疑似凭据克隆
 - Conditional Mediation = 在自动填充中显示 Passkey → 渐进式部署
+
 :::
 
-> **下一课**：[09 - Passkey：同步凭据与无密码未来](./09-Passkey同步凭据与无密码未来.mdx)
+> **下一课**：[09 - Passkey：同步凭据与无密码未来](/docs/09-Passkey同步凭据与无密码未来)

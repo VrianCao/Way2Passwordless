@@ -86,6 +86,7 @@ def register_begin(user):
 ```
 
 :::warning[user.id 的重要细节]
+
 `user.id` 必须是**不透明的字节串**（opaque byte string）：
 
 | | 做法 |
@@ -93,6 +94,7 @@ def register_begin(user):
 | ✗ | 邮箱地址 `"alice@example.com"` — 换认证器时隐私泄露 |
 | ✗ | 自增 ID `"12345"` — 可被枚举 |
 | ✓ | **随机 UUID** 或类似的不可关联标识符 |
+
 :::
 
 ---
@@ -168,7 +170,9 @@ attestedCredentialData = {
 ## 7.5 第四步：服务端验证
 
 :::danger[最关键的一步]
+
 服务端必须严格验证所有返回数据——任何一个检查缺失都可能导致安全漏洞。
+
 :::
 
 ```python
@@ -241,7 +245,9 @@ def register_complete(credential_response):
 | `last_used_at` | 最后使用时间 |
 
 :::tip
+
 服务器存储的 `public_key` **不是秘密**。即使整个数据库被盗，攻击者也无法伪造签名。这与密码哈希泄露（可以离线暴力破解）有**本质区别**。
+
 :::
 
 ---
@@ -249,6 +255,7 @@ def register_complete(credential_response):
 ## 本课要点
 
 :::note[总结]
+
 - 注册流程 = 4 步：服务端生成选项 → 浏览器处理 → 认证器生成密钥 → 服务端验证
 - `user.id` 必须是不透明字节串，不能用邮箱或自增 ID
 - 浏览器自动填入 origin，认证器自动计算 rpIdHash
@@ -256,6 +263,7 @@ def register_complete(credential_response):
 - 公钥用 COSE 格式（基于 CBOR）编码
 - 服务端必须验证：type、challenge、origin、rpIdHash、flags
 - 服务端存储公钥——不是秘密，泄露无影响
+
 :::
 
-> **下一课**：[08 - 认证流程深度拆解](./08-认证流程深度拆解.mdx)
+> **下一课**：[08 - 认证流程深度拆解](/docs/08-认证流程深度拆解)

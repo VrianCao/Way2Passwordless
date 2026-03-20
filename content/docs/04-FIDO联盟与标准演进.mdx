@@ -122,11 +122,13 @@ graph TB
 ```
 
 :::warning[RP ID 规则]
+
 - RP ID = 依赖方标识符 = 有效域名（例如：`example.com`）
 - RP ID 必须是当前页面域名**或其父域名**
 - `https://login.example.com` **可以**使用 RP ID `"example.com"`
 - `https://login.example.com` **不能**使用 RP ID `"other.com"`
 - 这是由浏览器强制执行的，不可绕过
+
 :::
 
 **RP ID 是防钓鱼的核心**——凭据在创建时绑定到 RP ID，只能在匹配的域名上使用。
@@ -181,6 +183,7 @@ graph TB
 ## 本课要点
 
 :::note[总结]
+
 - FIDO 联盟 = 行业联盟，推动无密码标准
 - U2F（2014）= 硬件二因素，证明了公钥认证可行（Google 零钓鱼）
 - FIDO2（2018）= WebAuthn + CTAP2，统一升级
@@ -189,6 +192,7 @@ graph TB
 - RP ID = 域名绑定，防钓鱼的核心
 - 认证器分两类：**平台**（内置）和**漫游**（外部）
 - Passkey（2022）= 可同步的 FIDO2 凭据（第 09 课详述）
+
 :::
 
-> **下一课**：[05 - WebAuthn：浏览器中的公钥认证](./05-WebAuthn浏览器中的公钥认证.mdx)
+> **下一课**：[05 - WebAuthn：浏览器中的公钥认证](/docs/05-WebAuthn浏览器中的公钥认证)
