@@ -205,7 +205,7 @@ function installSvgGeometryPolyfills(window: SvgMeasurementWindow) {
       };
     }
 
-    if (tag === 'rect' || tag === 'foreignobject' || tag === 'image' || tag === 'svg' || tag === 'use') {
+    if (tag === 'rect' || tag === 'foreignobject' || tag === 'image' || tag === 'use') {
       return {
         x: parseNumber(attr('x')),
         y: parseNumber(attr('y')),
