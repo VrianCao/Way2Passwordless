@@ -146,11 +146,11 @@ sequenceDiagram
 
     PC->>PC: 显示二维码
     Phone->>PC: 扫描二维码
-    Phone<-->BLE: 建立邻近证明
+    Phone->>BLE: 建立邻近证明
     Note over BLE: 证明物理邻近<br/>防止远程中继
 
-    Phone<-->Tunnel: 建立端到端加密通道
-    Tunnel<-->PC: 连接
+    Phone->>Tunnel: 建立端到端加密通道
+    Tunnel-->>PC: 建立连接
 
     Phone->>Phone: 弹出 Passkey 列表
     Phone->>Phone: 用户选择 + 面容验证
